@@ -343,3 +343,23 @@ cd ..
 - FastAPI automáticamente genera documentación OpenAPI en `/docs`
 
 ¿Preguntas? Revisa Swagger (`/docs`) o ejecuta `pytest -v` para entender el flujo.
+
+## inicializar el programa 
+
+Terminal 1 — Dominio (puerto 8001):
+bashcd ~/Desktop/sistema-gesti-n-adopci-n-mascotas--main/adopciones_dominio
+source ../.venv/bin/activate
+export DATABASE_URL="postgresql://postgres.pkkoudfejdlwgfjjixdl:proyectoinfraestructura@aws-1-us-west-2.pooler.supabase.com:6543/postgres"
+uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+
+Terminal 2 — Gateway (puerto 8000):
+bashcd ~/Desktop/sistema-gesti-n-adopci-n-mascotas--main
+source .venv/bin/activate
+export INTERNAL_API_URL="http://localhost:8001"
+export SUPABASE_URL="https://pkkoudfejdlwgfjjixdl.supabase.co"
+export SUPABASE_KEY="sb_publishable_sjfKqIAwm1khf3ltPrULSQ_9rPmF91H"
+export DATABASE_URL="postgresql://postgres.pkkoudfejdlwgfjjixdl:proyectoinfraestructura@aws-1-us-west-2.pooler.supabase.com:6543/postgres"
+uvicorn gateway.main:app --host 0.0.0.0 --port 8000 --reload
+
+Terminal 3
+npm run dev 
