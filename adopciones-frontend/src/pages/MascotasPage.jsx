@@ -15,7 +15,7 @@ const TIPO_MASCOTAS = [
   { codtipomascota: 7,  nomtipomascota: "Tortuga" },
   { codtipomascota: 8,  nomtipomascota: "Pez"     },
   { codtipomascota: 9,  nomtipomascota: "Reptil"  },
-  { codtipomascota: 10, nomtipomascota: "Hurón"   },
+  { codtipomascota: 10, nomtipomascota: "Huron"   },
 ];
 
 const STATUS_COLOR = {
@@ -24,21 +24,22 @@ const STATUS_COLOR = {
 };
 
 function formatFecha(fechaStr) {
-  if (!fechaStr) return "—";
-  return new Date(fechaStr).toLocaleDateString("es-CO", {
-    year: "numeric", month: "long", day: "numeric",
-  });
+  if (!fechaStr) return "";
+  const normalized = fechaStr.toString().replace(" ", "T");
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) return fechaStr;
+  return d.toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" });
 }
 
-async function fetchMascotasPorTipo(codtipomascota, token) {
+async function fetchTodasLasMascotas() {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/mascotas?codtipomascota=eq.${codtipomascota}` +
-    `&select=codmascota,nombre,especie,fechaingreso,codtipomascota,tipomascotas(nomtipomascota)` +
+    `${SUPABASE_URL}/rest/v1/mascotas` +
+    `?select=codmascota,nombre,especie,fechaingreso,codtipomascota,tipomascotas(nomtipomascota)` +
     `&order=nombre.asc`,
     {
       headers: {
         apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
         "Content-Type": "application/json",
       },
     }
@@ -51,20 +52,23 @@ export default function MascotasPage() {
   const { token, user } = useAuth();
 
   const [tipoSeleccionado, setTipoSeleccionado] = useState("");
-  const [mascotas, setMascotas]                 = useState([]);
-  const [loadingMascotas, setLoadingMascotas]   = useState(false);
+  const [todasMascotas, setTodasMascotas]       = useState([]);
+  const [loadingMascotas, setLoadingMascotas]   = useState(true);
+  const [errorMascotas, setErrorMascotas]       = useState(null);
   const [estados, setEstados]                   = useState({});
 
+  // Carga todas las mascotas al montar
   useEffect(() => {
-    if (!tipoSeleccionado) { setMascotas([]); setEstados({}); return; }
-    setMascotas([]);
-    setEstados({});
-    setLoadingMascotas(true);
-    fetchMascotasPorTipo(tipoSeleccionado, token)
-      .then(setMascotas)
-      .catch(() => setMascotas([]))
+    fetchTodasLasMascotas()
+      .then(setTodasMascotas)
+      .catch((err) => setErrorMascotas(err.message))
       .finally(() => setLoadingMascotas(false));
-  }, [tipoSeleccionado]);
+  }, []);
+
+  // Filtrado en cliente segun tipo seleccionado
+  const mascotasFiltradas = tipoSeleccionado
+    ? todasMascotas.filter((m) => m.codtipomascota === parseInt(tipoSeleccionado))
+    : todasMascotas;
 
   function setEstado(codmascota, patch) {
     setEstados((prev) => ({
@@ -116,7 +120,7 @@ export default function MascotasPage() {
       <p className="page-title">Adoptar mascota</p>
       <p className="page-sub">Selecciona el tipo de mascota para ver las disponibles</p>
 
-      {/* Select de tipo */}
+      {/* Card filtro tipo — identica a la original */}
       <div className="card">
         <div className="section-label">Tipo de mascota</div>
         <select
@@ -133,144 +137,154 @@ export default function MascotasPage() {
         </select>
       </div>
 
-      {/* Tarjetas de mascotas */}
-      {tipoSeleccionado && (
-        <div className="card">
-          <div className="section-label">
-            {tipoInfo?.nomtipomascota}s registrados
-          </div>
+      {/* Card mascotas */}
+      <div className="card">
+        <div className="section-label">
+          {tipoSeleccionado ? `${tipoInfo?.nomtipomascota}s registrados` : "Mascotas registradas"}
+        </div>
 
-          {loadingMascotas && (
-            <p style={{ color: "var(--color-text-secondary)", fontSize: 14 }}>
-              <span className="spinner" /> Cargando mascotas...
-            </p>
-          )}
+        {loadingMascotas && (
+          <p style={{ color: "var(--color-text-secondary)", fontSize: 14 }}>
+            <span className="spinner" /> Cargando mascotas...
+          </p>
+        )}
 
-          {!loadingMascotas && mascotas.length === 0 && (
-            <p style={{ color: "var(--color-text-secondary)", fontSize: 14 }}>
-              No hay mascotas registradas de este tipo.
-            </p>
-          )}
+        {errorMascotas && (
+          <div className="result-box result-error" style={{ fontSize: 13 }}>{errorMascotas}</div>
+        )}
 
-          {!loadingMascotas && mascotas.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {mascotas.map((m) => {
-                const est          = estados[m.codmascota] || {};
-                const vr           = est.verifyResult;
-                const sr           = est.solicitudResult;
-                const disponible   = vr?.data?.disponible;
-                const canSolicitar = vr?.status === 200 && disponible;
-                const nomTipo      = m.tipomascotas?.nomtipomascota ?? tipoInfo?.nomtipomascota ?? "—";
+        {!loadingMascotas && !errorMascotas && mascotasFiltradas.length === 0 && (
+          <p style={{ color: "var(--color-text-secondary)", fontSize: 14 }}>
+            No hay mascotas registradas de este tipo.
+          </p>
+        )}
 
-                return (
-                  <div key={m.codmascota} style={{
-                    border: "1px solid var(--color-border, #e0e0e0)",
-                    borderRadius: 10,
-                    padding: "16px",
-                    background: "var(--color-surface, #fafafa)",
+        {!loadingMascotas && mascotasFiltradas.length > 0 && (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
+            gap: 14,
+          }}>
+            {mascotasFiltradas.map((m) => {
+              const est        = estados[m.codmascota] || {};
+              const vr         = est.verifyResult;
+              const sr         = est.solicitudResult;
+              const disponible = vr?.data?.disponible;
+              const canSol     = vr?.status === 200 && disponible;
+              const nomTipo    = m.tipomascotas?.nomtipomascota ?? tipoInfo?.nomtipomascota ?? "—";
+
+              return (
+                <div key={m.codmascota} style={{
+                  border: "1px solid var(--color-border, #e0e0e0)",
+                  borderRadius: 10,
+                  background: "var(--color-surface, #fafafa)",
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                }}>
+
+                  {/* Espacio para foto — patitas placeholder */}
+                  <div style={{
+                    height: 120,
+                    background: "#f8fafc",
+                    borderBottom: "1px solid var(--color-border, #e0e0e0)",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
                   }}>
-                    {/* Info de la mascota */}
-                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-                      {/* Datos */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <span style={{ fontWeight: 700, fontSize: 17 }}>
-                          {m.nombre}
-                        </span>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 13,
-                          color: "var(--color-text-secondary)" }}>
-                          <span>
-                            <strong style={{ color: "var(--color-text)" }}>Especie:</strong>{" "}
-                            {m.especie ?? "—"}
-                          </span>
-                          <span>
-                            <strong style={{ color: "var(--color-text)" }}>Tipo:</strong>{" "}
-                            {nomTipo}
-                          </span>
-                          <span>
-                            <strong style={{ color: "var(--color-text)" }}>Ingreso:</strong>{" "}
-                            {formatFecha(m.fechaingreso)}
-                          </span>
-                          <span>
-                            <strong style={{ color: "var(--color-text)" }}>Cód:</strong>{" "}
-                            {m.codmascota}
-                          </span>
-                        </div>
-                      </div>
+                    <i className="ti ti-paw" style={{ fontSize: 38, color: "#cbd5e1" }} aria-hidden="true" />
+                    <span style={{ fontSize: 11, color: "#94a3b8", letterSpacing: 0.3 }}>Sin foto</span>
+                  </div>
 
-                      {/* Botón verificar (solo si no se ha verificado) */}
-                      {!vr && (
+                  {/* Info + acciones */}
+                  <div style={{
+                    padding: "12px 14px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    flex: 1,
+                  }}>
+                    {/* Nombre */}
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{m.nombre}</div>
+
+                    {/* Especie y tipo */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12,
+                      color: "var(--color-text-secondary)" }}>
+                      <span>
+                        <strong style={{ color: "var(--color-text)" }}>Especie:</strong> {m.especie ?? "—"}
+                      </span>
+                      <span>
+                        <strong style={{ color: "var(--color-text)" }}>Tipo:</strong> {nomTipo}
+                      </span>
+                    </div>
+
+                    {/* Resultado verificacion */}
+                    {vr && (
+                      <div className={`result-box result-${STATUS_COLOR[vr.status] || "error"}`}
+                        style={{ fontSize: 11, padding: "4px 8px" }}>
+                        {vr.status === 200
+                          ? <>{disponible ? "Disponible" : "No disponible"}{vr.data?.razon && ` · ${vr.data.razon}`}</>
+                          : <>Error {vr.status} — {vr.data?.detail}</>}
+                      </div>
+                    )}
+
+                    {/* Resultado solicitud */}
+                    {sr && (
+                      <div className={`result-box result-${STATUS_COLOR[sr.status] || "error"}`}
+                        style={{ fontSize: 11, padding: "4px 8px" }}>
+                        {sr.status === 201 ? "Solicitud enviada correctamente" : sr.data?.detail}
+                        {sr.data?.code && <code style={{ marginLeft: 4, fontSize: 10 }}>[{sr.data.code}]</code>}
+                      </div>
+                    )}
+
+                    {/* Botones */}
+                    <div style={{ marginTop: "auto", paddingTop: 4 }}>
+                      {!vr ? (
                         <button
                           className="btn-secondary"
                           onClick={() => handleVerificar(m.codmascota)}
                           disabled={est.loadingVerify}
-                          style={{ fontSize: 13, alignSelf: "flex-start" }}
+                          style={{ fontSize: 12, width: "100%" }}
                         >
                           {est.loadingVerify
                             ? <><span className="spinner" />Verificando...</>
                             : <><i className="ti ti-search" aria-hidden="true" /> Verificar disponibilidad</>}
                         </button>
-                      )}
-                    </div>
-
-                    {/* Resultado verificación */}
-                    {vr && (
-                      <div style={{ marginTop: 12 }}>
-                        <div className={`result-box result-${STATUS_COLOR[vr.status] || "error"}`}>
-                          {vr.status === 200 ? (
-                            <span>
-                              {disponible ? "Disponible para adopción" : "No disponible"}
-                              {vr.data?.razon && ` · ${vr.data.razon}`}
-                            </span>
-                          ) : (
-                            <span>Error {vr.status} — {vr.data?.detail}</span>
-                          )}
-                        </div>
-
-                        <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                      ) : (
+                        <div style={{ display: "flex", gap: 6 }}>
                           {vr.status === 200 && (
                             <button
                               className="btn-primary"
                               onClick={() => handleSolicitar(m.codmascota)}
-                              disabled={!canSolicitar || est.loadingSolicitud}
-                              style={{ opacity: canSolicitar ? 1 : 0.45, fontSize: 13 }}
+                              disabled={!canSol || est.loadingSolicitud}
+                              style={{ opacity: canSol ? 1 : 0.45, fontSize: 12, flex: 1 }}
                             >
                               {est.loadingSolicitud
                                 ? <><span className="spinner" />Enviando...</>
-                                : <><i className="ti ti-heart" aria-hidden="true" /> Solicitar adopción</>}
+                                : <><i className="ti ti-heart" aria-hidden="true" /> Solicitar adopcion</>}
                             </button>
                           )}
                           <button
                             className="btn-secondary"
                             onClick={() => handleVerificar(m.codmascota)}
                             disabled={est.loadingVerify}
-                            style={{ fontSize: 13 }}
+                            style={{ fontSize: 12 }}
                           >
-                            <i className="ti ti-refresh" aria-hidden="true" /> Actualizar
+                            <i className="ti ti-refresh" aria-hidden="true" />
                           </button>
                         </div>
-
-                        {/* Resultado solicitud */}
-                        {sr && (
-                          <div className={`result-box result-${STATUS_COLOR[sr.status] || "error"}`}
-                            style={{ marginTop: 10 }}>
-                            <strong>HTTP {sr.status}</strong>
-                            {sr.status === 201
-                              ? ` — ¡Solicitud creada! Estado: "${sr.data.estado}" · ${new Date(sr.data.fechasolicitud).toLocaleString("es-CO")}`
-                              : ` — ${sr.data.detail}`}
-                            {sr.data?.code && (
-                              <code style={{ marginLeft: 6, fontSize: 11 }}>[{sr.data.code}]</code>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
