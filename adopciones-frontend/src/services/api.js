@@ -1,4 +1,4 @@
-const GATEWAY_URL = "http://localhost:8000";
+
 
 function getHeaders(token) {
   return {
@@ -10,7 +10,7 @@ function getHeaders(token) {
 
 export async function verificarMascota(codmascota, token) {
   const res = await fetch(
-    GATEWAY_URL + "/gateway/v1/mascotas/" + codmascota + "/disponible",
+    "/gateway/v1/mascotas/" + codmascota + "/disponible",
     { method: "GET", headers: getHeaders(token) }
   );
   const data = await res.json();
@@ -18,7 +18,7 @@ export async function verificarMascota(codmascota, token) {
 }
 
 export async function crearSolicitud(cedula, codmascota, token) {
-  const res = await fetch(GATEWAY_URL + "/gateway/v1/solicitudes", {
+  const res = await fetch("/gateway/v1/solicitudes", {
     method: "POST",
     headers: getHeaders(token),
     body: JSON.stringify({ cedula: cedula, codmascota: codmascota }),

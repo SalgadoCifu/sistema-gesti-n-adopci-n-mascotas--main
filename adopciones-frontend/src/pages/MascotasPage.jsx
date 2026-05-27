@@ -245,7 +245,7 @@ export default function MascotasPage() {
                         <button
                           className="btn-secondary"
                           onClick={() => handleVerificar(m.codmascota)}
-                          disabled={est.loadingVerify}
+                          disabled={est.loadingVerify || !token}
                           style={{ fontSize: 12, width: "100%" }}
                         >
                           {est.loadingVerify
@@ -258,8 +258,8 @@ export default function MascotasPage() {
                             <button
                               className="btn-primary"
                               onClick={() => handleSolicitar(m.codmascota)}
-                              disabled={!canSol || est.loadingSolicitud}
-                              style={{ opacity: canSol ? 1 : 0.45, fontSize: 12, flex: 1 }}
+                              disabled={!canSol || est.loadingSolicitud || !token}
+                              style={{ opacity: (canSol && token) ? 1 : 0.45, fontSize: 12, flex: 1 }}
                             >
                               {est.loadingSolicitud
                                 ? <><span className="spinner" />Enviando...</>
@@ -269,7 +269,7 @@ export default function MascotasPage() {
                           <button
                             className="btn-secondary"
                             onClick={() => handleVerificar(m.codmascota)}
-                            disabled={est.loadingVerify}
+                            disabled={est.loadingVerify || !token}
                             style={{ fontSize: 12 }}
                           >
                             <i className="ti ti-refresh" aria-hidden="true" />

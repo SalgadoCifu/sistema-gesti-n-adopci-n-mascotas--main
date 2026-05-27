@@ -93,3 +93,7 @@ class MascotaRepository(AbstractMascotaRepository):
                 raise ValueError(
                     "No es posible marcar disponible una mascota con solicitudes activas."
                 )
+
+            # La disponibilidad se calcula dinámicamente mediante solicitudes activas.
+            # Por tanto, no existe una columna "estado" en la tabla mascotas y no es necesario actualizarla.
+

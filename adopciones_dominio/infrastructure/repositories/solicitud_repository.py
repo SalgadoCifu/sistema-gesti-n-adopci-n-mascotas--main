@@ -24,12 +24,16 @@ class SolicitudRepository(AbstractSolicitudRepository):
         )
         async with self._session_factory() as session:
             async with session.begin():
+                fechasolicitud_val = solicitud.fechasolicitud
+                if fechasolicitud_val and fechasolicitud_val.tzinfo is not None:
+                    fechasolicitud_val = fechasolicitud_val.replace(tzinfo=None)
+
                 await session.execute(
                     insert_query,
                     {
                         "cedula": solicitud.cedula,
                         "codmascota": solicitud.codmascota,
-                        "fechasolicitud": solicitud.fechasolicitud.replace(tzinfo=None),
+                        "fechasolicitud": fechasolicitud_val,
                         "estado": solicitud.estado,
                     },
                 )

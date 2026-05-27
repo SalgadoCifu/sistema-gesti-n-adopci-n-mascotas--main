@@ -101,6 +101,9 @@ code { font-family: ui-monospace, monospace; font-size: 0.88em; background: #f3f
 
 input[type="text"],
 input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
 textarea,
 select {
   padding: 8px 12px;

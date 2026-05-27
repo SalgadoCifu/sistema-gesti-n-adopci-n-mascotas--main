@@ -1,9 +1,12 @@
 import time
+
 import httpx
 from fastapi import Request
+from jose import jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-import jwt
+
+from gateway.config import SUPABASE_URL
 
 _jwks_cache: dict = {"keys": [], "fetched_at": 0.0}
 
@@ -14,7 +17,7 @@ async def _get_jwks() -> list:
     if not _jwks_cache["keys"] or now - _jwks_cache["fetched_at"] > 3600:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
-                "https://pkkoudfejdlwgfjjixdl.supabase.co/auth/v1/.well-known/jwks.json",
+                f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json",
                 timeout=10,
             )
             resp.raise_for_status()
@@ -29,38 +32,43 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
 
+        # Ruta pública: no requiere token
+        if request.url.path == "/gateway/v1/register":
+            return await call_next(request)
+
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return JSONResponse(
                 status_code=401,
-                content={"detail": "Token de autenticacion no proporcionado", "code": "UNAUTHORIZED"},
+                content={
+                    "detail": "Token de autenticación no proporcionado",
+                    "code": "UNAUTHORIZED",
+                },
             )
 
         token = auth_header[7:]
         try:
             keys = await _get_jwks()
-            jwks_client = jwt.PyJWKClient.__new__(jwt.PyJWKClient)
-            
-            signing_key = None
-            unverified = jwt.api_jwt.decode_complete(token, options={"verify_signature": False})
-            kid = unverified["header"].get("kid")
-            
+            unverified = jwt.get_unverified_headers(token)
+
+            key = None
             for k in keys:
-                if k.get("kid") == kid:
-                    signing_key = jwt.algorithms.ECAlgorithm.from_jwk(k)
+                if k.get("kid") == unverified.get("kid"):
+                    key = k
                     break
 
-            if not signing_key:
+            if not key:
                 return JSONResponse(
                     status_code=401,
-                    content={"detail": "Token invalido", "code": "INVALID_TOKEN"},
+                    content={"detail": "Token inválido", "code": "INVALID_TOKEN"},
                 )
 
             payload = jwt.decode(
                 token,
-                signing_key,
-                algorithms=["ES256"],
+                key,
+                algorithms=["RS256", "ES256"],
                 audience="authenticated",
+                options={"verify_exp": True},
             )
 
             user_metadata = payload.get("user_metadata", {})
@@ -74,16 +82,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if not cedula:
                 return JSONResponse(
                     status_code=401,
-                    content={"detail": "El token no contiene una cedula valida", "code": "MISSING_CEDULA"},
+                    content={
+                        "detail": "El token no contiene una cédula válida",
+                        "code": "MISSING_CEDULA",
+                    },
                 )
 
             request.state.user_cedula = str(cedula)
 
-        except jwt.ExpiredSignatureError:
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Token expirado", "code": "TOKEN_EXPIRED"},
-            )
         except Exception as e:
             return JSONResponse(
                 status_code=401,

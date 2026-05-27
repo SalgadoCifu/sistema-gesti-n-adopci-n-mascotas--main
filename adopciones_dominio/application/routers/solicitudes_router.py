@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from typing import Annotated
+from fastapi import APIRouter, Depends, Header
 from starlette import status
 
 from application.dependencies import get_mascota_repo, get_solicitud_repo
@@ -22,10 +23,12 @@ router = APIRouter(tags=["solicitudes"])
 )
 async def crear_solicitud_adopcion(
     payload: SolicitudCreateRequest,
+    x_user_cedula: Annotated[str | None, Header()] = None,
     solicitud_repo: AbstractSolicitudRepository = Depends(get_solicitud_repo),
     mascota_repo: AbstractMascotaRepository = Depends(get_mascota_repo),
 ) -> SolicitudResponse:
+    cedula_a_usar = x_user_cedula if x_user_cedula else payload.cedula
     return await CrearSolicitudAdopcion(solicitud_repo, mascota_repo).execute(
-        cedula=payload.cedula,
+        cedula=cedula_a_usar,
         codmascota=payload.codmascota,
     )

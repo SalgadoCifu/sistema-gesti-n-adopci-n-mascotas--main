@@ -68,7 +68,6 @@ async function fetchSolicitudActiva(cedula, token) {
     }
 
     const raw = await res.json().catch(() => null);
-    console.log(`[fetchSolicitudActiva] status=${res.status}`, raw);
 
     if (!res.ok) continue;
     if (Array.isArray(raw) && raw.length > 0) {
@@ -95,7 +94,6 @@ async function fetchSolicitudActiva(cedula, token) {
       try {
         const r = await fetch(masUrl, { headers: { ...headers, "Content-Type": "application/json" } });
         const d = await r.json().catch(() => null);
-        console.log(`[fetchMascota] status=${r.status}`, d);
         if (r.ok && Array.isArray(d) && d.length > 0) {
           solicitud.mascota = d[0];
           break;
