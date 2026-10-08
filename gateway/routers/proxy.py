@@ -16,18 +16,26 @@ router = APIRouter(prefix="/gateway/v1")
     "/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
 )
-@limiter.limit("10/minute")
+@limiter.limit("60/minute")
 async def proxy(request: Request, path: str):
+    """
+    Proxy seguro hacia el backend interno.
+    Inyecta la cabecera X-User-Cedula validada por el Gateway
+    y propaga transparentemente los códigos HTTP (400, 404, 409, 422, etc.)
+    y cuerpos JSON devueltos por el backend interno.
+    """
     internal_url = f"{INTERNAL_API_URL}/api/v1/{path}"
     method = request.method
 
     logger.info("proxy %s %s -> %s", method, request.url.path, internal_url)
 
+    # Filtrar cabeceras que interfieren con la conexión upstream
     headers = {
         k: v
         for k, v in request.headers.items()
         if k.lower() not in {"host", "content-length", "transfer-encoding"}
     }
+
     user_cedula = getattr(request.state, "user_cedula", None)
     if not user_cedula:
         logger.error("proxy missing user_cedula in request.state")
@@ -35,7 +43,9 @@ async def proxy(request: Request, path: str):
             status_code=401,
             content={"detail": "Usuario no autenticado", "code": "UNAUTHORIZED"},
         )
-    headers["X-User-Cedula"] = user_cedula
+
+    # Inyección estricta de identidad para el backend interno
+    headers["X-User-Cedula"] = str(user_cedula)
 
     body = await request.body()
     params = dict(request.query_params)
@@ -51,18 +61,18 @@ async def proxy(request: Request, path: str):
             )
             logger.info(
                 "proxy response %s %s status=%s",
-                method, internal_url, resp.status_code,
+                method,
+                internal_url,
+                resp.status_code,
             )
+            # Propaga de manera transparente el status_code, contenido y content-type
             return Response(
                 status_code=resp.status_code,
                 content=resp.content,
-                media_type=resp.headers.get("content-type"),
+                media_type=resp.headers.get("content-type") or "application/json",
             )
         except httpx.RequestError as exc:
-            logger.error(
-                "proxy connection error %s %s: %s",
-                method, internal_url, exc,
-            )
+            logger.error("proxy connection error %s %s: %s", method, internal_url, exc)
             return JSONResponse(
                 status_code=502,
                 content={
@@ -71,10 +81,7 @@ async def proxy(request: Request, path: str):
                 },
             )
         except Exception as exc:
-            logger.exception(
-                "proxy unexpected error %s %s: %s",
-                method, internal_url, exc,
-            )
+            logger.exception("proxy unexpected error %s %s: %s", method, internal_url, exc)
             return JSONResponse(
                 status_code=500,
                 content={

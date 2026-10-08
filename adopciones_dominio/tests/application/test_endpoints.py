@@ -45,16 +45,34 @@ def _clear_overrides() -> None:
     app.dependency_overrides.clear()
 
 
+def test_post_solicitudes_401_sin_header_cedula() -> None:
+    client = _client_with_overrides(
+        solicitud_repo=StubSolicitudRepo(),
+        mascota_repo=StubMascotaRepo(Mascota(codmascota=10, nombre="Luna", estado="disponible")),
+    )
+    # Sin cabecera X-User-Cedula
+    response = client.post("/api/v1/solicitudes", json={"codmascota": 10})
+    _clear_overrides()
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "UNAUTHORIZED"
+
+
 def test_post_solicitudes_201() -> None:
     client = _client_with_overrides(
         solicitud_repo=StubSolicitudRepo(),
         mascota_repo=StubMascotaRepo(Mascota(codmascota=10, nombre="Luna", estado="disponible")),
     )
-    response = client.post("/api/v1/solicitudes", json={"cedula": "1001", "codmascota": 10})
+    response = client.post(
+        "/api/v1/solicitudes",
+        headers={"X-User-Cedula": "1001"},
+        json={"codmascota": 10},
+    )
     _clear_overrides()
 
     assert response.status_code == 201
     assert response.json()["estado"] == "pendiente"
+    assert response.json()["cedula"] == "1001"
 
 
 def test_post_solicitudes_409() -> None:
@@ -71,7 +89,11 @@ def test_post_solicitudes_409() -> None:
         ),
         mascota_repo=StubMascotaRepo(Mascota(codmascota=10, nombre="Luna", estado="disponible")),
     )
-    response = client.post("/api/v1/solicitudes", json={"cedula": "1001", "codmascota": 10})
+    response = client.post(
+        "/api/v1/solicitudes",
+        headers={"X-User-Cedula": "1001"},
+        json={"codmascota": 10},
+    )
     _clear_overrides()
 
     assert response.status_code == 409
@@ -83,7 +105,11 @@ def test_post_solicitudes_422() -> None:
         solicitud_repo=StubSolicitudRepo(),
         mascota_repo=StubMascotaRepo(Mascota(codmascota=10, nombre="Luna", estado="en_proceso")),
     )
-    response = client.post("/api/v1/solicitudes", json={"cedula": "1001", "codmascota": 10})
+    response = client.post(
+        "/api/v1/solicitudes",
+        headers={"X-User-Cedula": "1001"},
+        json={"codmascota": 10},
+    )
     _clear_overrides()
 
     assert response.status_code == 422
@@ -95,7 +121,12 @@ def test_post_solicitudes_400_por_payload_invalido() -> None:
         solicitud_repo=StubSolicitudRepo(),
         mascota_repo=StubMascotaRepo(Mascota(codmascota=10, nombre="Luna", estado="disponible")),
     )
-    response = client.post("/api/v1/solicitudes", json={"cedula": "1001"})
+    # Payload sin codmascota requerido
+    response = client.post(
+        "/api/v1/solicitudes",
+        headers={"X-User-Cedula": "1001"},
+        json={"cedula": "1001"},
+    )
     _clear_overrides()
 
     assert response.status_code == 400

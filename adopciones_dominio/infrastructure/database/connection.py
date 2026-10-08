@@ -1,4 +1,9 @@
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from infrastructure.database.config import require_database_url
 
@@ -19,13 +24,13 @@ def _as_async_database_url(database_url: str) -> str:
 def get_async_engine() -> AsyncEngine:
     global _async_engine
     if _async_engine is None:
-        # asyncpg + pgbouncer (pooler) can cause DuplicatePreparedStatementError
-        # because prepared statements are not safe with certain pool modes.
-        # Set asyncpg's statement_cache_size to 0 via connect_args to disable
-        # client-side prepared statement caching when using a pooler.
+        # El Transaction Pooler de Supabase (puerto 6543 basado en PgBouncer)
+        # requiere deshabilitar el caché de sentencias preparadas de asyncpg
+        # mediante statement_cache_size=0 para evitar DuplicatePreparedStatementError.
         _async_engine = create_async_engine(
             _as_async_database_url(require_database_url()),
             pool_pre_ping=True,
+            pool_recycle=300,
             connect_args={"statement_cache_size": 0},
         )
     return _async_engine

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -9,8 +10,6 @@ from domain.entities import Mascota
 from domain.repositories import AbstractMascotaRepository
 from infrastructure.database.connection import get_session_factory
 from infrastructure.mappers.mapper import MascotaMapper
-
-ACTIVE_SOLICITUD_STATES = ("pendiente", "en_revision", "aprobada", "en_proceso")
 
 
 class MascotaRepository(AbstractMascotaRepository):
@@ -23,7 +22,7 @@ class MascotaRepository(AbstractMascotaRepository):
         self._session = session
 
     @asynccontextmanager
-    async def _session_scope(self):
+    async def _session_scope(self) -> AsyncIterator[AsyncSession]:
         if self._session is not None:
             yield self._session
             return
@@ -37,12 +36,7 @@ class MascotaRepository(AbstractMascotaRepository):
                 m.codmascota,
                 m.nombre,
                 m.especie,
-                EXISTS (
-                    SELECT 1
-                    FROM solicitudes s
-                    WHERE s.codmascota = m.codmascota
-                      AND s.estado IN ('pendiente', 'en_revision', 'aprobada', 'en_proceso')
-                ) AS tiene_solicitud_activa
+                m.estado
             FROM mascotas m
             WHERE m.codmascota = :codmascota
             """
@@ -54,46 +48,24 @@ class MascotaRepository(AbstractMascotaRepository):
 
     async def actualizar_estado(self, codmascota: int, estado: str) -> None:
         estado_normalizado = estado.lower()
-        if estado_normalizado not in {"disponible", "en_proceso"}:
+        if estado_normalizado not in {"disponible", "en_proceso", "adoptada", "no disponible"}:
             raise ValueError(
-                "Estado inválido para la mascota. Valores válidos: 'disponible' y 'en_proceso'."
+                f"Estado inválido para la mascota: '{estado}'. "
+                "Valores válidos: 'disponible', 'en_proceso', 'adoptada', 'no disponible'."
             )
 
-        lock_query = text(
+        query = text(
             """
-            SELECT codmascota
-            FROM mascotas
+            UPDATE mascotas
+            SET estado = :estado
             WHERE codmascota = :codmascota
-            FOR UPDATE
-            """
-        )
-        active_query = text(
-            """
-            SELECT 1
-            FROM solicitudes
-            WHERE codmascota = :codmascota
-              AND estado IN ('pendiente', 'en_revision', 'aprobada', 'en_proceso')
-            LIMIT 1
             """
         )
 
         async with self._session_scope() as session:
-            lock_result = await session.execute(lock_query, {"codmascota": codmascota})
-            if lock_result.fetchone() is None:
-                raise ValueError(f"No existe la mascota {codmascota}.")
-
-            active_result = await session.execute(active_query, {"codmascota": codmascota})
-            tiene_solicitud_activa = active_result.fetchone() is not None
-
-            if estado_normalizado == "en_proceso" and not tiene_solicitud_activa:
-                raise ValueError(
-                    "No es posible marcar la mascota en_proceso sin una solicitud activa."
-                )
-            if estado_normalizado == "disponible" and tiene_solicitud_activa:
-                raise ValueError(
-                    "No es posible marcar disponible una mascota con solicitudes activas."
-                )
-
-            # La disponibilidad se calcula dinámicamente mediante solicitudes activas.
-            # Por tanto, no existe una columna "estado" en la tabla mascotas y no es necesario actualizarla.
-
+            result = await session.execute(
+                query,
+                {"codmascota": codmascota, "estado": estado_normalizado},
+            )
+            if result.rowcount == 0:
+                raise ValueError(f"No existe la mascota con código {codmascota}.")

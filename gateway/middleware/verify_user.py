@@ -10,11 +10,23 @@ from gateway.dependencies import get_engine
 
 logger = logging.getLogger("gateway.verify_user")
 
+PUBLIC_PATHS = {
+    "/gateway/v1/register",
+    "/health",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+}
+
 
 class VerifyUserMiddleware(BaseHTTPMiddleware):
-
     async def dispatch(self, request: Request, call_next):
         if request.method == "OPTIONS":
+            return await call_next(request)
+
+        # Rutas públicas no requieren verificar existencia previa en adoptantes
+        path = request.url.path
+        if path in PUBLIC_PATHS or path.startswith("/docs") or path.startswith("/redoc"):
             return await call_next(request)
 
         cedula = getattr(request.state, "user_cedula", None)
@@ -27,7 +39,7 @@ class VerifyUserMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-        def _check_user() -> bool:
+        def _check_adoptante() -> bool:
             engine = get_engine()
             with engine.connect() as conn:
                 row = conn.execute(
@@ -37,7 +49,7 @@ class VerifyUserMiddleware(BaseHTTPMiddleware):
                 return row is not None
 
         try:
-            exists = await asyncio.to_thread(_check_user)
+            exists = await asyncio.to_thread(_check_adoptante)
             logger.info("verify_user cedula=%s exists=%s", cedula, exists)
             if not exists:
                 return JSONResponse(

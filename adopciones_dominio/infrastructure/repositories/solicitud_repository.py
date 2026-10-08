@@ -1,3 +1,5 @@
+from datetime import timezone
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -16,6 +18,10 @@ class SolicitudRepository(AbstractSolicitudRepository):
         self._session_factory = session_factory or get_session_factory()
 
     async def guardar(self, solicitud: SolicitudAdopcion) -> SolicitudAdopcion:
+        """
+        Inserta la solicitud de adopción y actualiza atómicamente el estado
+        de la mascota a 'en_proceso' dentro de una misma transacción de base de datos.
+        """
         insert_query = text(
             """
             INSERT INTO solicitudes (cedula, codmascota, fechasolicitud, estado)
@@ -25,8 +31,8 @@ class SolicitudRepository(AbstractSolicitudRepository):
         async with self._session_factory() as session:
             async with session.begin():
                 fechasolicitud_val = solicitud.fechasolicitud
-                if fechasolicitud_val and fechasolicitud_val.tzinfo is not None:
-                    fechasolicitud_val = fechasolicitud_val.replace(tzinfo=None)
+                if fechasolicitud_val and fechasolicitud_val.tzinfo is None:
+                    fechasolicitud_val = fechasolicitud_val.replace(tzinfo=timezone.utc)
 
                 await session.execute(
                     insert_query,

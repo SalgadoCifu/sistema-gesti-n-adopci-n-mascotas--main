@@ -1,7 +1,8 @@
-# Script para iniciar el proyecto en Windows usando PowerShell
+# Script para iniciar el proyecto completo en Windows usando PowerShell
 # Carga variables de entorno desde .env
-if (Test-Path .env) {
-    Get-Content .env | ForEach-Object {
+$root = $PSScriptRoot
+if (Test-Path "$root\.env") {
+    Get-Content "$root\.env" | ForEach-Object {
         $line = $_.Trim()
         if ($line -and -not $line.StartsWith("#") -and $line -match "^(?<key>[^=]+)=(?<value>.*)$") {
             $key = $Matches.key.Trim()
@@ -11,38 +12,56 @@ if (Test-Path .env) {
     }
 }
 
-$VENV_PYTHON = "$PSScriptRoot\.venv\Scripts\python.exe"
+$VENV_PYTHON = "$root\.venv\Scripts\python.exe"
 
-# Verificar si el entorno virtual existe
+# 1. Verificar entorno virtual de Python
 if (-not (Test-Path $VENV_PYTHON)) {
     Write-Host "No se encontró el entorno virtual en .venv." -ForegroundColor Red
     Write-Host "Creando el entorno virtual e instalando dependencias..." -ForegroundColor Yellow
-    Start-Process powershell -Wait -ArgumentList "-NoExit", "-Command", "py -3.13 -m venv .venv; .\.venv\Scripts\pip.exe install -r requirements.txt"
+    py -3.13 -m venv "$root\.venv"
     if (-not (Test-Path $VENV_PYTHON)) {
         Write-Host "Error al crear el entorno virtual. Por favor, créalo manualmente con: py -3.13 -m venv .venv" -ForegroundColor Red
         Exit
     }
+    & "$root\.venv\Scripts\pip.exe" install -r "$root\requirements.txt"
 }
 
-# Verificar si uvicorn está instalado en el venv
+# 2. Verificar dependencias de Python
 $hasUvicorn = & $VENV_PYTHON -c "import uvicorn" 2>$null
 if ($LastExitCode -ne 0) {
-    Write-Host "Las dependencias de requirements.txt no están instaladas en el entorno virtual." -ForegroundColor Yellow
-    Write-Host "Instalando dependencias ahora..." -ForegroundColor Green
-    & "$PSScriptRoot\.venv\Scripts\pip.exe" install -r "$PSScriptRoot\requirements.txt"
+    Write-Host "Instalando dependencias de requirements.txt..." -ForegroundColor Green
+    & "$root\.venv\Scripts\pip.exe" install -r "$root\requirements.txt"
 }
 
-Write-Host "Iniciando servidores usando el Python del entorno virtual..." -ForegroundColor Cyan
+# 3. Verificar dependencias de Node.js en adopciones-frontend
+$frontendDir = "$root\adopciones-frontend"
+if (Test-Path $frontendDir) {
+    if (-not (Test-Path "$frontendDir\node_modules")) {
+        Write-Host "Instalando dependencias de Node.js en adopciones-frontend..." -ForegroundColor Green
+        Start-Process -FilePath "cmd.exe" -ArgumentList "/c cd /d `"$frontendDir`" && npm install" -Wait
+    }
+}
 
-# Iniciar dominio en puerto 8001
-Write-Host "Abriendo Dominio en puerto 8001..." -ForegroundColor Green
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$Host.UI.RawUI.WindowTitle = 'Servicio Dominio (8001)'; cd adopciones_dominio; ..\.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8001"
+Write-Host "Iniciando los 3 servicios en simultáneo..." -ForegroundColor Cyan
 
-# Esperar un momento
+# Servicio 1: Backend Interno (puerto 8001)
+Write-Host "Levantando Backend Interno (Dominio) en http://localhost:8001..." -ForegroundColor Green
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$Host.UI.RawUI.WindowTitle = 'Backend Interno (8001)'; `$env:PYTHONPATH = '$root;$root\adopciones_dominio'; cd '$root\adopciones_dominio'; & '$VENV_PYTHON' -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
+
+# Esperar 2 segundos
 Start-Sleep -Seconds 2
 
-# Iniciar gateway en puerto 8000
-Write-Host "Abriendo Gateway en puerto 8000..." -ForegroundColor Green
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$Host.UI.RawUI.WindowTitle = 'Gateway de Autenticación (8000)'; .\.venv\Scripts\python.exe -m uvicorn gateway.main:app --host 0.0.0.0 --port 8000"
+# Servicio 2: API Gateway (puerto 8000)
+Write-Host "Levantando API Gateway en http://localhost:8000..." -ForegroundColor Green
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$Host.UI.RawUI.WindowTitle = 'API Gateway (8000)'; `$env:PYTHONPATH = '$root;$root\adopciones_dominio'; cd '$root'; & '$VENV_PYTHON' -m uvicorn gateway.main:app --host 0.0.0.0 --port 8000 --reload"
 
-Write-Host "Servicios iniciados. Puedes cerrarlos cerrando sus respectivas ventanas." -ForegroundColor Yellow
+# Esperar 2 segundos
+Start-Sleep -Seconds 2
+
+# Servicio 3: Frontend Vite / React (puerto 3000)
+if (Test-Path $frontendDir) {
+    Write-Host "Levantando Frontend (React/Vite) en http://localhost:3000..." -ForegroundColor Green
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$Host.UI.RawUI.WindowTitle = 'Frontend React (3000)'; cd '$frontendDir'; npm run dev"
+}
+
+Write-Host "¡Los 3 servicios fueron iniciados! Frontend disponible en http://localhost:3000" -ForegroundColor Yellow
