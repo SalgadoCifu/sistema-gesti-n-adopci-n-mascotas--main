@@ -24,20 +24,7 @@ def test_gateway_unauthorized_sin_token(client):
 
 
 def test_gateway_forbidden_si_no_es_adoptante(client):
-    # Simula token válido con cédula pero que no existe en tabla adoptantes
-    with (
-        patch("gateway.middleware.auth.jwt.get_unverified_headers", return_value={"kid": "test-kid"}),
-        patch("gateway.middleware.auth._get_jwks", new_callable=AsyncMock, return_value=[{"kid": "test-kid"}]),
-        patch(
-            "gateway.middleware.auth.jwt.decode",
-            return_value={"sub": "user-uuid-1", "user_metadata": {"cedula": "9999"}},
-        ),
-        patch("gateway.middleware.verify_user.VerifyUserMiddleware.dispatch") as mock_dispatch,
-    ):
-        # Usamos TestClient directamente sobre el middleware
-        pass
-
-    # Prueba con mock en la verificación de base de datos
+    # Simula token válido con cédula que no existe en la tabla adoptantes
     with (
         patch("gateway.middleware.auth._get_jwks", new_callable=AsyncMock, return_value=[]),
         patch(
