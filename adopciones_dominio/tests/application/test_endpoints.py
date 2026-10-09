@@ -2,7 +2,9 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
-from application.dependencies import get_mascota_repo, get_solicitud_repo
+from application.bus import EventBus, Mediator, TransactionBehavior, DomainExceptionBehavior
+from application.commands import CrearSolicitudCommand, CrearSolicitudHandler
+from application.dependencies import get_mediator
 from domain.entities import Mascota, SolicitudAdopcion
 from main import app
 
@@ -11,33 +13,89 @@ class StubSolicitudRepo:
     def __init__(self, activas: list[SolicitudAdopcion] | None = None) -> None:
         self._activas = activas or []
         self.guardadas: list[SolicitudAdopcion] = []
+        self.seen: list[SolicitudAdopcion] = []
 
     async def obtener_activas_por_adoptante(self, cedula: str) -> list[SolicitudAdopcion]:
-        return self._activas
+        result = list(self._activas)
+        for s in result:
+            self.seen.append(s)
+        return result
 
     async def guardar(self, solicitud: SolicitudAdopcion) -> SolicitudAdopcion:
         self.guardadas.append(solicitud)
+        self.seen.append(solicitud)
         return solicitud
+
+    async def add(self, solicitud: SolicitudAdopcion) -> SolicitudAdopcion:
+        return await self.guardar(solicitud)
 
 
 class StubMascotaRepo:
     def __init__(self, mascota: Mascota | None) -> None:
         self._mascota = mascota
+        self.seen: list[Mascota] = []
+        self.actualizados: list[tuple[int, str]] = []
 
     async def obtener_por_id(self, codmascota: int) -> Mascota | None:
         if self._mascota and self._mascota.codmascota == codmascota:
-            return self._mascota
+            m = self._mascota
+            self.seen.append(m)
+            return m
         return None
 
     async def actualizar_estado(self, codmascota: int, estado: str) -> None:
-        return None
+        self.actualizados.append((codmascota, estado))
+        if self._mascota and self._mascota.codmascota == codmascota:
+            self._mascota.estado = estado.lower()
+
+
+class DummyUoW:
+    def __init__(self, solicitudes: StubSolicitudRepo, mascotas: StubMascotaRepo) -> None:
+        self.solicitudes = solicitudes
+        self.mascotas = mascotas
+        self.commits = 0
+        self.rollbacks = 0
+        self.closed = False
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        await self.close()
+
+    async def start(self):
+        return self
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+    async def close(self) -> None:
+        self.closed = True
+
+    def collect_new_events(self) -> list:
+        events: list = []
+        for agg in getattr(self.solicitudes, "seen", []) + getattr(self.mascotas, "seen", []):
+            try:
+                events.extend(agg.pull_events())
+            except Exception:
+                pass
+        return events
 
 
 def _client_with_overrides(
     solicitud_repo: StubSolicitudRepo, mascota_repo: StubMascotaRepo
 ) -> TestClient:
-    app.dependency_overrides[get_solicitud_repo] = lambda: solicitud_repo
-    app.dependency_overrides[get_mascota_repo] = lambda: mascota_repo
+    bus = EventBus()
+    mediator = Mediator()
+    mediator.register(CrearSolicitudCommand, CrearSolicitudHandler())
+    mediator.add_behavior(DomainExceptionBehavior())
+    mediator.add_behavior(
+        TransactionBehavior(lambda: DummyUoW(solicitud_repo, mascota_repo), bus)
+    )
+    app.dependency_overrides[get_mediator] = lambda: mediator
     return TestClient(app)
 
 
@@ -50,7 +108,6 @@ def test_post_solicitudes_401_sin_header_cedula() -> None:
         solicitud_repo=StubSolicitudRepo(),
         mascota_repo=StubMascotaRepo(Mascota(codmascota=10, nombre="Luna", estado="disponible")),
     )
-    # Sin cabecera X-User-Cedula
     response = client.post("/api/v1/solicitudes", json={"codmascota": 10})
     _clear_overrides()
 
@@ -121,7 +178,6 @@ def test_post_solicitudes_400_por_payload_invalido() -> None:
         solicitud_repo=StubSolicitudRepo(),
         mascota_repo=StubMascotaRepo(Mascota(codmascota=10, nombre="Luna", estado="disponible")),
     )
-    # Payload sin codmascota requerido
     response = client.post(
         "/api/v1/solicitudes",
         headers={"X-User-Cedula": "1001"},

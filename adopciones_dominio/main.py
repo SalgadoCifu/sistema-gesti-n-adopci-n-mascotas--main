@@ -3,6 +3,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from application.bus import (
+    DomainExceptionBehavior,
+    EventBus,
+    Mediator,
+    TransactionBehavior,
+)
+from application.commands import CrearSolicitudCommand, CrearSolicitudHandler
 from application.dtos import ErrorResponse
 from application.routers.mascotas_router import router as mascotas_router
 from application.routers.solicitudes_router import router as solicitudes_router
@@ -11,11 +18,22 @@ from domain.exceptions import (
     MascotaNoDisponibleError,
     MaxSolicitudesExcedidoError,
 )
+from infrastructure.unit_of_work import sqlalchemy_uow_factory
 
 app = FastAPI(
     title="Sistema de Gestión de Adopciones de Mascotas - Backend Interno",
     version="1.0.0",
 )
+
+_event_bus = EventBus()
+_mediator = Mediator()
+_mediator.register(CrearSolicitudCommand, CrearSolicitudHandler())
+_mediator.add_behavior(DomainExceptionBehavior())
+_mediator.add_behavior(TransactionBehavior(sqlalchemy_uow_factory, _event_bus))
+
+app.state.event_bus = _event_bus
+app.state.mediator = _mediator
+
 
 app.add_middleware(
     CORSMiddleware,

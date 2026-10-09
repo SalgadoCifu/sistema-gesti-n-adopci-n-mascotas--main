@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Protocol, TypeVar
+from typing import TYPE_CHECKING, Protocol, TypeVar
+
+if TYPE_CHECKING:
+    from application.common.unit_of_work import AbstractUnitOfWork
 
 TMessage = TypeVar("TMessage")
 TResult = TypeVar("TResult")
@@ -14,15 +17,15 @@ class Handler(Protocol[TMessage, TResult]):
 
 
 class CommandHandler(Protocol[TMessage, TResult]):
-    """Manejador de un ``Command``."""
+    """Manejador de un ``Command``: recibe el comando y su UnitOfWork."""
 
-    async def handle(self, message: TMessage) -> TResult: ...
+    async def handle(self, command: TMessage, uow: "AbstractUnitOfWork") -> TResult: ...
 
 
 class QueryHandler(Protocol[TMessage, TResult]):
-    """Manejador de una ``Query``."""
+    """Manejador de una ``Query`` (solo lectura, sin UnitOfWork)."""
 
-    async def handle(self, message: TMessage) -> TResult: ...
+    async def handle(self, query: TMessage) -> TResult: ...
 
 
 class EventHandler(Protocol[TEvent]):

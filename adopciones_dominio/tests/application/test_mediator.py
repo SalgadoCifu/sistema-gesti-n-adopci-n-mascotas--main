@@ -6,11 +6,11 @@ from dataclasses import dataclass
 import pytest
 
 from application.bus import HandlerNotFoundError, Mediator
-from application.common import Command
+from application.common import Query
 
 
 @dataclass(frozen=True, slots=True)
-class _Saludar(Command):
+class _Saludar(Query):
     nombre: str = "mundo"
 
 
@@ -18,9 +18,9 @@ class _SaludarHandler:
     def __init__(self, trace: list[str]) -> None:
         self._trace = trace
 
-    async def handle(self, message: _Saludar) -> str:
+    async def handle(self, query: _Saludar) -> str:
         self._trace.append("handler")
-        return f"hola {message.nombre}"
+        return f"hola {query.nombre}"
 
 
 def _behavior(nombre: str, trace: list[str]):
