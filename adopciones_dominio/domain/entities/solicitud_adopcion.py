@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from domain.events import DomainEvent, SolicitudCreada
 from domain.exceptions import MaxSolicitudesExcedidoError, MascotaNoDisponibleError
 
 if TYPE_CHECKING:
@@ -17,6 +18,7 @@ class SolicitudAdopcion:
     codmascota: int
     fechasolicitud: datetime
     estado: str = "pendiente"
+    _events: list[DomainEvent] = field(default_factory=list, repr=False)
 
     @classmethod
     def crear(cls, adoptante: "Adoptante", mascota: "Mascota") -> "SolicitudAdopcion":
@@ -28,12 +30,21 @@ class SolicitudAdopcion:
                 estado_actual=mascota.estado,
             )
 
-        mascota.estado = "en_proceso"
+        mascota.cambiar_estado("en_proceso")
         # Use timezone-aware UTC datetime for timestamptz columns
         now_utc = datetime.now(timezone.utc)
-        return cls(
+        solicitud = cls(
             cedula=adoptante.cedula,
             codmascota=mascota.codmascota,
             fechasolicitud=now_utc,
             estado="pendiente",
         )
+        solicitud._events.append(
+            SolicitudCreada(cedula=solicitud.cedula, codmascota=solicitud.codmascota)
+        )
+        return solicitud
+
+    def pull_events(self) -> list[DomainEvent]:
+        events = list(self._events)
+        self._events.clear()
+        return events
