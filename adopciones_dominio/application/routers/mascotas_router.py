@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends
 
-from application.dependencies import get_mascota_repo
+from application.dependencies import get_mediator
 from application.dtos import ErrorResponse, MascotaDisponibleResponse
-from application.use_cases import VerificarMascotaDisponible
-from domain.repositories import AbstractMascotaRepository
+from application.queries import VerificarDisponibilidadQuery
 
 router = APIRouter(tags=["mascotas"])
 
@@ -15,6 +14,6 @@ router = APIRouter(tags=["mascotas"])
 )
 async def verificar_disponibilidad_mascota(
     codmascota: int,
-    mascota_repo: AbstractMascotaRepository = Depends(get_mascota_repo),
+    mediator=Depends(get_mediator),
 ) -> MascotaDisponibleResponse:
-    return await VerificarMascotaDisponible(mascota_repo).execute(codmascota)
+    return await mediator.send(VerificarDisponibilidadQuery(codmascota=codmascota))

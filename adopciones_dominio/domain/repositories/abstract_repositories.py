@@ -19,3 +19,9 @@ class AbstractSolicitudRepository(ABC):
 
     @abstractmethod
     async def obtener_activas_por_adoptante(self, cedula: str) -> list[SolicitudAdopcion]: ...
+
+    @abstractmethod
+    async def obtener_por_id(self, codsolicitud: int) -> Optional[SolicitudAdopcion]: ...
+
+    @abstractmethod
+    async def actualizar_estado(self, codsolicitud: int, estado: str) -> None: ...

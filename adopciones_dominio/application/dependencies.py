@@ -1,7 +1,12 @@
-from fastapi import Header, HTTPException, status
+from fastapi import Header, HTTPException, Request, status
 
+from application.bus import Mediator
 from domain.repositories import AbstractMascotaRepository, AbstractSolicitudRepository
 from infrastructure.repositories import MascotaRepository, SolicitudRepository
+
+
+def get_mediator(request: Request) -> Mediator:
+    return request.app.state.mediator
 
 
 def get_solicitud_repo() -> AbstractSolicitudRepository:

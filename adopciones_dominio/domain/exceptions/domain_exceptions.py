@@ -17,3 +17,14 @@ class MascotaNoDisponibleError(DomainError):
         super().__init__(
             f"La mascota {codmascota} no está disponible. Estado actual: {estado_actual}."
         )
+
+
+class TransicionInvalidaError(DomainError):
+    code = "TRANSICION_INVALIDA"
+
+    def __init__(self, estado_actual: str, accion: str) -> None:
+        self.estado_actual = estado_actual
+        self.accion = accion
+        super().__init__(
+            f"No se puede {accion} una solicitud en estado '{estado_actual}'."
+        )

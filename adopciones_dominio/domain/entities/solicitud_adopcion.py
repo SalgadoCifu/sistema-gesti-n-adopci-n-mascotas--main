@@ -1,14 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from domain.exceptions import MaxSolicitudesExcedidoError, MascotaNoDisponibleError
+from domain.events import DomainEvent, SolicitudCreada
+from domain.exceptions import (
+    MascotaNoDisponibleError,
+    MaxSolicitudesExcedidoError,
+    TransicionInvalidaError,
+)
 
 if TYPE_CHECKING:
     from .adoptante import Adoptante
     from .mascota import Mascota
+
+_ESTADOS_TRANSICIONABLES = {"pendiente", "en_revision"}
 
 
 @dataclass(slots=True)
@@ -17,6 +24,7 @@ class SolicitudAdopcion:
     codmascota: int
     fechasolicitud: datetime
     estado: str = "pendiente"
+    _events: list[DomainEvent] = field(default_factory=list, repr=False)
 
     @classmethod
     def crear(cls, adoptante: "Adoptante", mascota: "Mascota") -> "SolicitudAdopcion":
@@ -28,12 +36,31 @@ class SolicitudAdopcion:
                 estado_actual=mascota.estado,
             )
 
-        mascota.estado = "en_proceso"
+        mascota.cambiar_estado("en_proceso")
         # Use timezone-aware UTC datetime for timestamptz columns
         now_utc = datetime.now(timezone.utc)
-        return cls(
+        solicitud = cls(
             cedula=adoptante.cedula,
             codmascota=mascota.codmascota,
             fechasolicitud=now_utc,
             estado="pendiente",
         )
+        solicitud._events.append(
+            SolicitudCreada(cedula=solicitud.cedula, codmascota=solicitud.codmascota)
+        )
+        return solicitud
+
+    def pull_events(self) -> list[DomainEvent]:
+        events = list(self._events)
+        self._events.clear()
+        return events
+
+    def aprobar(self) -> None:
+        if self.estado not in _ESTADOS_TRANSICIONABLES:
+            raise TransicionInvalidaError(estado_actual=self.estado, accion="aprobar")
+        self.estado = "aprobada"
+
+    def rechazar(self) -> None:
+        if self.estado not in _ESTADOS_TRANSICIONABLES:
+            raise TransicionInvalidaError(estado_actual=self.estado, accion="rechazar")
+        self.estado = "rechazada"

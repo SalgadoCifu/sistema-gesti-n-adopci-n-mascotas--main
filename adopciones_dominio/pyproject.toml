@@ -18,7 +18,3 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["domain*"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
