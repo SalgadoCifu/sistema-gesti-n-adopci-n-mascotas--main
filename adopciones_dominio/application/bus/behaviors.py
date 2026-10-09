@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from application.bus.events import EventBus
 from application.bus.pipeline import MessageHandler
+from application.common.command import Command
 from application.common.unit_of_work import (
     UnitOfWorkFactory,
     reset_current_uow,
@@ -32,6 +33,9 @@ class TransactionBehavior:
 
     def __call__(self, next_handler: MessageHandler) -> MessageHandler:
         async def wrapped(message: Any) -> Any:
+            if not isinstance(message, Command):
+                return await next_handler(message)
+
             async with self._uow_factory() as uow:
                 token = set_current_uow(uow)
                 try:

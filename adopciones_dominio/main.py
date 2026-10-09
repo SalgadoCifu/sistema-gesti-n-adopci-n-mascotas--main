@@ -10,7 +10,12 @@ from application.bus import (
     TransactionBehavior,
 )
 from application.commands import CrearSolicitudCommand, CrearSolicitudHandler
+from application.dependencies import get_mascota_repo
 from application.dtos import ErrorResponse
+from application.queries import (
+    VerificarDisponibilidadHandler,
+    VerificarDisponibilidadQuery,
+)
 from application.routers.mascotas_router import router as mascotas_router
 from application.routers.solicitudes_router import router as solicitudes_router
 from domain.exceptions import (
@@ -28,6 +33,10 @@ app = FastAPI(
 _event_bus = EventBus()
 _mediator = Mediator()
 _mediator.register(CrearSolicitudCommand, CrearSolicitudHandler())
+_mediator.register(
+    VerificarDisponibilidadQuery,
+    VerificarDisponibilidadHandler(get_mascota_repo()),
+)
 _mediator.add_behavior(DomainExceptionBehavior())
 _mediator.add_behavior(TransactionBehavior(sqlalchemy_uow_factory, _event_bus))
 
