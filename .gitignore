@@ -10,9 +10,12 @@ v/
 
 # Tests
 .pytest_cache/
+.coverage
+htmlcov/
 
 # Variables de entorno
 .env
+.env.test
 
 # Node.js
 node_modules/
@@ -31,3 +34,4 @@ Thumbs.db
 # builds
 dist/
 build/
+
