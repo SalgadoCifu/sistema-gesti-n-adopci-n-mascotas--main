@@ -9,7 +9,14 @@ from application.bus import (
     Mediator,
     TransactionBehavior,
 )
-from application.commands import CrearSolicitudCommand, CrearSolicitudHandler
+from application.commands import (
+    AprobarAdopcionCommand,
+    AprobarAdopcionHandler,
+    CrearSolicitudCommand,
+    CrearSolicitudHandler,
+    RechazarAdopcionCommand,
+    RechazarAdopcionHandler,
+)
 from application.dependencies import get_mascota_repo
 from application.dtos import ErrorResponse
 from application.queries import (
@@ -33,6 +40,8 @@ app = FastAPI(
 _event_bus = EventBus()
 _mediator = Mediator()
 _mediator.register(CrearSolicitudCommand, CrearSolicitudHandler())
+_mediator.register(AprobarAdopcionCommand, AprobarAdopcionHandler())
+_mediator.register(RechazarAdopcionCommand, RechazarAdopcionHandler())
 _mediator.register(
     VerificarDisponibilidadQuery,
     VerificarDisponibilidadHandler(get_mascota_repo()),

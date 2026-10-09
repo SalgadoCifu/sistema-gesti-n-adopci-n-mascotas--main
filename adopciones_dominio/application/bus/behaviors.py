@@ -16,6 +16,7 @@ from domain.exceptions import (
     DomainError,
     MascotaNoDisponibleError,
     MaxSolicitudesExcedidoError,
+    TransicionInvalidaError,
 )
 
 
@@ -57,6 +58,7 @@ class TransactionBehavior:
 _DOMAIN_ERROR_STATUS: dict[Type[DomainError], tuple[int, str]] = {
     MaxSolicitudesExcedidoError: (409, "MAX_SOLICITUDES_EXCEDIDO"),
     MascotaNoDisponibleError: (422, "MASCOTA_NO_DISPONIBLE"),
+    TransicionInvalidaError: (409, "TRANSICION_INVALIDA"),
 }
 
 

@@ -5,11 +5,17 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from domain.events import DomainEvent, SolicitudCreada
-from domain.exceptions import MaxSolicitudesExcedidoError, MascotaNoDisponibleError
+from domain.exceptions import (
+    MascotaNoDisponibleError,
+    MaxSolicitudesExcedidoError,
+    TransicionInvalidaError,
+)
 
 if TYPE_CHECKING:
     from .adoptante import Adoptante
     from .mascota import Mascota
+
+_ESTADOS_TRANSICIONABLES = {"pendiente", "en_revision"}
 
 
 @dataclass(slots=True)
@@ -48,3 +54,13 @@ class SolicitudAdopcion:
         events = list(self._events)
         self._events.clear()
         return events
+
+    def aprobar(self) -> None:
+        if self.estado not in _ESTADOS_TRANSICIONABLES:
+            raise TransicionInvalidaError(estado_actual=self.estado, accion="aprobar")
+        self.estado = "aprobada"
+
+    def rechazar(self) -> None:
+        if self.estado not in _ESTADOS_TRANSICIONABLES:
+            raise TransicionInvalidaError(estado_actual=self.estado, accion="rechazar")
+        self.estado = "rechazada"

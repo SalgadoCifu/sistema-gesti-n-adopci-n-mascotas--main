@@ -68,3 +68,33 @@ class SolicitudWriteRepository(AbstractSolicitudRepository):
         for solicitud in solicitudes:
             self._tener_en_cuenta(solicitud)
         return solicitudes
+
+    async def obtener_por_id(self, codsolicitud: int) -> SolicitudAdopcion | None:
+        result = await self._session.execute(
+            text(
+                """
+                SELECT cedula, codmascota, fechasolicitud, estado
+                FROM solicitudes
+                WHERE codsolicitud = :codsolicitud
+                """
+            ),
+            {"codsolicitud": codsolicitud},
+        )
+        solicitud = SolicitudMapper.from_row(result.fetchone())
+        if solicitud is not None:
+            self._tener_en_cuenta(solicitud)
+        return solicitud
+
+    async def actualizar_estado(self, codsolicitud: int, estado: str) -> None:
+        result = await self._session.execute(
+            text(
+                """
+                UPDATE solicitudes
+                SET estado = :estado
+                WHERE codsolicitud = :codsolicitud
+                """
+            ),
+            {"codsolicitud": codsolicitud, "estado": estado},
+        )
+        if result.rowcount == 0:
+            raise ValueError(f"No existe la solicitud con código {codsolicitud}.")

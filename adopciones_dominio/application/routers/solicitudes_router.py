@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends
 from starlette import status
 
 from application.bus import Mediator
-from application.commands import CrearSolicitudCommand
+from application.commands import (
+    AprobarAdopcionCommand,
+    CrearSolicitudCommand,
+    RechazarAdopcionCommand,
+)
 from application.dependencies import get_current_user_cedula, get_mediator
 from application.dtos import ErrorResponse, SolicitudCreateRequest, SolicitudResponse
 
@@ -34,3 +38,39 @@ async def crear_solicitud_adopcion(
     return await mediator.send(
         CrearSolicitudCommand(cedula=cedula, codmascota=payload.codmascota)
     )
+
+
+@router.post(
+    "/solicitudes/{solicitud_id}/aprobar",
+    response_model=SolicitudResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
+)
+async def aprobar_solicitud_adopcion(
+    solicitud_id: int,
+    mediator: Mediator = Depends(get_mediator),
+) -> SolicitudResponse:
+    # TODO: validar autorización por rol (solo administradores/gestores).
+    return await mediator.send(AprobarAdopcionCommand(solicitud_id=solicitud_id))
+
+
+@router.post(
+    "/solicitudes/{solicitud_id}/rechazar",
+    response_model=SolicitudResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
+)
+async def rechazar_solicitud_adopcion(
+    solicitud_id: int,
+    mediator: Mediator = Depends(get_mediator),
+) -> SolicitudResponse:
+    # TODO: validar autorización por rol (solo administradores/gestores).
+    return await mediator.send(RechazarAdopcionCommand(solicitud_id=solicitud_id))
