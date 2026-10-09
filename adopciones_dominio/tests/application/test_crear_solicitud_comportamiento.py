@@ -6,9 +6,16 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import text
 
-from application.use_cases.crear_solicitud_adopcion import CrearSolicitudAdopcion
+from application.bus import (
+    DomainExceptionBehavior,
+    EventBus,
+    Mediator,
+    TransactionBehavior,
+)
+from application.commands import CrearSolicitudCommand, CrearSolicitudHandler
 from infrastructure.repositories.mascota_repository import MascotaRepository
 from infrastructure.repositories.solicitud_repository import SolicitudRepository
+from infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 from tests.db_support import db_context
 
 pytestmark = pytest.mark.integration
@@ -18,14 +25,44 @@ def _run(coro) -> None:
     asyncio.run(coro)
 
 
+async def _ejecutar(factory, cedula: str, codmascota: int):
+    """Invoca el handler dentro de un UoW real y confirma la transacción."""
+    handler = CrearSolicitudHandler()
+    uow = SqlAlchemyUnitOfWork(factory)
+    await uow.start()
+    try:
+        response = await handler.handle(
+            CrearSolicitudCommand(cedula=cedula, codmascota=codmascota), uow
+        )
+        await uow.commit()
+    except Exception:
+        await uow.rollback()
+        await uow.close()
+        raise
+    await uow.close()
+    return response
+
+
+async def _ejecutar_por_mediator(factory, cedula: str, codmascota: int):
+    """Pasa por el Mediator real para traducir DomainError al contrato HTTP."""
+    mediator = Mediator()
+    mediator.register(CrearSolicitudCommand, CrearSolicitudHandler())
+    mediator.add_behavior(DomainExceptionBehavior())
+    mediator.add_behavior(
+        TransactionBehavior(lambda: SqlAlchemyUnitOfWork(factory), EventBus())
+    )
+    return await mediator.send(
+        CrearSolicitudCommand(cedula=cedula, codmascota=codmascota)
+    )
+
+
 def test_crear_solicitud_exitosa_persiste_y_marca_mascota() -> None:
     async def _caso() -> None:
         async with db_context() as factory:
             solicitud_repo = SolicitudRepository(session_factory=factory)
             mascota_repo = MascotaRepository(session_factory=factory)
-            use_case = CrearSolicitudAdopcion(solicitud_repo, mascota_repo)
 
-            response = await use_case.execute(cedula="1001", codmascota=10)
+            response = await _ejecutar(factory, cedula="1001", codmascota=10)
 
             assert response.cedula == "1001"
             assert response.codmascota == 10
@@ -43,12 +80,8 @@ def test_crear_solicitud_exitosa_persiste_y_marca_mascota() -> None:
 def test_crear_solicitud_404_si_mascota_no_existe() -> None:
     async def _caso() -> None:
         async with db_context() as factory:
-            use_case = CrearSolicitudAdopcion(
-                SolicitudRepository(session_factory=factory),
-                MascotaRepository(session_factory=factory),
-            )
             with pytest.raises(HTTPException) as exc:
-                await use_case.execute(cedula="1001", codmascota=999999)
+                await _ejecutar(factory, cedula="1001", codmascota=999999)
 
             assert exc.value.status_code == 404
             assert exc.value.detail["code"] == "MASCOTA_NO_ENCONTRADA"
@@ -59,13 +92,9 @@ def test_crear_solicitud_404_si_mascota_no_existe() -> None:
 def test_crear_solicitud_422_si_mascota_no_disponible() -> None:
     async def _caso() -> None:
         async with db_context() as factory:
-            use_case = CrearSolicitudAdopcion(
-                SolicitudRepository(session_factory=factory),
-                MascotaRepository(session_factory=factory),
-            )
             with pytest.raises(HTTPException) as exc:
                 # La mascota 11 está 'en_proceso' por semilla.
-                await use_case.execute(cedula="1001", codmascota=11)
+                await _ejecutar_por_mediator(factory, cedula="1001", codmascota=11)
 
             assert exc.value.status_code == 422
             assert exc.value.detail["code"] == "MASCOTA_NO_DISPONIBLE"
@@ -82,14 +111,10 @@ def test_crear_solicitud_422_si_mascota_no_disponible() -> None:
 def test_crear_solicitud_409_si_adoptante_ya_tiene_activa() -> None:
     async def _caso() -> None:
         async with db_context() as factory:
-            use_case = CrearSolicitudAdopcion(
-                SolicitudRepository(session_factory=factory),
-                MascotaRepository(session_factory=factory),
-            )
-            await use_case.execute(cedula="1001", codmascota=10)
+            await _ejecutar(factory, cedula="1001", codmascota=10)
 
             with pytest.raises(HTTPException) as exc:
-                await use_case.execute(cedula="1001", codmascota=12)
+                await _ejecutar_por_mediator(factory, cedula="1001", codmascota=12)
 
             assert exc.value.status_code == 409
             assert exc.value.detail["code"] == "MAX_SOLICITUDES_EXCEDIDO"

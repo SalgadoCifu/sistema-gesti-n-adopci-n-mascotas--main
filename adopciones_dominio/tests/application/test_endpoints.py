@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from application.bus import EventBus, Mediator, TransactionBehavior, DomainExceptionBehavior
 from application.commands import CrearSolicitudCommand, CrearSolicitudHandler
-from application.dependencies import get_mediator
+from application.dependencies import get_mascota_repo, get_mediator
 from domain.entities import Mascota, SolicitudAdopcion
 from main import app
 
@@ -96,6 +96,7 @@ def _client_with_overrides(
         TransactionBehavior(lambda: DummyUoW(solicitud_repo, mascota_repo), bus)
     )
     app.dependency_overrides[get_mediator] = lambda: mediator
+    app.dependency_overrides[get_mascota_repo] = lambda: mascota_repo
     return TestClient(app)
 
 
