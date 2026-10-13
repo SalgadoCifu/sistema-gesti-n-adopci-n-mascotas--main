@@ -1,10 +1,10 @@
-# 🐾 Sistema de Gestión de Adopción de Mascotas
+#  Sistema de Gestión de Adopción de Mascotas
 
 Sistema web completo para gestionar la adopción de mascotas, desarrollado con una arquitectura de **3 capas**: Frontend (React/Vite), API Gateway (FastAPI) y Backend Interno (FastAPI con arquitectura DDD).
 
 ---
 
-## 📐 Arquitectura del Sistema
+##  Arquitectura del Sistema
 
 ```
 ┌──────────────────────┐     ┌───────────────────────┐     ┌──────────────────────────┐
@@ -29,7 +29,7 @@ Sistema web completo para gestionar la adopción de mascotas, desarrollado con u
 
 ---
 
-## 📁 Estructura del Repositorio
+##  Estructura del Repositorio
 
 ```
 ├── adopciones-frontend/          # App React/Vite (puerto 3000)
@@ -83,7 +83,7 @@ Sistema web completo para gestionar la adopción de mascotas, desarrollado con u
 
 ---
 
-## 🚀 Instalación y Ejecución
+##  Instalación y Ejecución
 
 ### Prerrequisitos
 
@@ -148,15 +148,15 @@ bash start.sh
 
 El script automáticamente:
 
-1. ✅ Crea el entorno virtual `.venv` si no existe e instala dependencias Python.
-2. ✅ Instala las dependencias de Node.js del frontend si faltan.
-3. ✅ Levanta el **Backend Interno** en `http://localhost:8001`.
-4. ✅ Levanta el **API Gateway** en `http://localhost:8000`.
-5. ✅ Levanta el **Frontend React** en `http://localhost:3000`.
+1.  Crea el entorno virtual `.venv` si no existe e instala dependencias Python.
+2.  Instala las dependencias de Node.js del frontend si faltan.
+3.  Levanta el **Backend Interno** en `http://localhost:8001`.
+4.  Levanta el **API Gateway** en `http://localhost:8000`.
+5.  Levanta el **Frontend React** en `http://localhost:3000`.
 
 ---
 
-## 🔗 URLs del sistema en desarrollo
+##  URLs del sistema en desarrollo
 
 | Servicio | URL | Documentación |
 | :--- | :--- | :--- |
@@ -166,7 +166,7 @@ El script automáticamente:
 
 ---
 
-## 🛡️ Seguridad del Gateway
+##  Seguridad del Gateway
 
 El API Gateway implementa las siguientes capas de seguridad antes de reenviar cualquier petición al Backend Interno:
 
@@ -181,7 +181,7 @@ El API Gateway implementa las siguientes capas de seguridad antes de reenviar cu
 
 ---
 
-## 🧪 Ejecutar las pruebas
+##  Ejecutar las pruebas
 
 ```powershell
 # Windows (PowerShell)
@@ -203,7 +203,7 @@ La suite incluye:
 
 ---
 
-## 📊 Modelo de Datos
+##  Modelo de Datos
 
 ```
 ┌──────────────┐    ┌──────────────┐    ┌───────────────┐
@@ -248,7 +248,7 @@ La suite incluye:
 
 ---
 
-## 🔧 Tecnologías Utilizadas
+##  Tecnologías Utilizadas
 
 | Componente | Tecnologías |
 | :--- | :--- |
@@ -261,6 +261,9 @@ La suite incluye:
 
 ---
 
-## 👥 Autores
+##  Autores
 
-- Santiago Salgado Cifuentes
+- Santiago Villamil
+- Maria Salgado
+- Sofia Carrero
+- Paula Ortiz
