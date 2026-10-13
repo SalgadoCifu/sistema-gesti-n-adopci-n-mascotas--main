@@ -7,10 +7,22 @@ from application.commands import (
     CrearSolicitudCommand,
     RechazarAdopcionCommand,
 )
-from application.dependencies import get_current_user_cedula, get_mediator
+from application.dependencies import get_current_user_cedula, get_mediator, get_solicitud_repo
 from application.dtos import ErrorResponse, SolicitudCreateRequest, SolicitudResponse
 
 router = APIRouter(tags=["solicitudes"])
+
+
+@router.get("/solicitudes/activa")
+async def obtener_solicitud_activa(
+    cedula: str = Depends(get_current_user_cedula),
+    repo=Depends(get_solicitud_repo),
+):
+    """
+    Obtiene la última solicitud (activa o reciente) del adoptante autenticado.
+    Retorna la información de la solicitud y los datos de la mascota vinculada.
+    """
+    return await repo.obtener_ultima_por_adoptante(cedula)
 
 
 @router.post(

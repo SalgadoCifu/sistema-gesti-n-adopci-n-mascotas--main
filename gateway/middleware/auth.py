@@ -19,6 +19,8 @@ _jwks_cache: dict[str, Any] = {"keys": [], "fetched_at": 0.0}
 
 PUBLIC_PATHS = {
     "/gateway/v1/register",
+    "/gateway/v1/auth/login",
+    "/gateway/v1/localidades",
     "/health",
     "/docs",
     "/openapi.json",

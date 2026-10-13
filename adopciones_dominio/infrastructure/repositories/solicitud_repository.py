@@ -64,3 +64,68 @@ class SolicitudRepository(AbstractSolicitudRepository):
             result = await session.execute(query, {"cedula": cedula})
             rows = result.fetchall()
         return [SolicitudMapper.from_row(row) for row in rows]
+
+    async def obtener_ultima_por_adoptante(self, cedula: str) -> dict | None:
+        query = text(
+            """
+            SELECT
+                s.codsolicitud,
+                s.cedula,
+                s.codmascota,
+                s.fechasolicitud,
+                s.estado,
+                m.nombre AS nombre_mascota,
+                m.especie AS especie_mascota
+            FROM solicitudes s
+            LEFT JOIN mascotas m ON s.codmascota = m.codmascota
+            WHERE s.cedula = :cedula
+            ORDER BY s.fechasolicitud DESC
+            LIMIT 1
+            """
+        )
+        async with self._session_factory() as session:
+            result = await session.execute(query, {"cedula": cedula})
+            row = result.mappings().fetchone()
+            if not row:
+                return None
+            return {
+                "codsolicitud": row["codsolicitud"],
+                "cedula": row["cedula"],
+                "codmascota": row["codmascota"],
+                "fechasolicitud": row["fechasolicitud"],
+                "estado": row["estado"],
+                "mascota": {
+                    "codmascota": row["codmascota"],
+                    "nombre": row["nombre_mascota"],
+                    "especie": row["especie_mascota"],
+                } if row["codmascota"] else None,
+            }
+
+    async def obtener_por_id(self, codsolicitud: int) -> SolicitudAdopcion | None:
+        query = text(
+            """
+            SELECT cedula, codmascota, fechasolicitud, estado
+            FROM solicitudes
+            WHERE codsolicitud = :codsolicitud
+            """
+        )
+        async with self._session_factory() as session:
+            result = await session.execute(query, {"codsolicitud": codsolicitud})
+            row = result.fetchone()
+            return SolicitudMapper.from_row(row)
+
+    async def actualizar_estado(self, codsolicitud: int, estado: str) -> None:
+        query = text(
+            """
+            UPDATE solicitudes
+            SET estado = :estado
+            WHERE codsolicitud = :codsolicitud
+            """
+        )
+        async with self._session_factory() as session:
+            result = await session.execute(
+                query,
+                {"codsolicitud": codsolicitud, "estado": estado},
+            )
+            if result.rowcount == 0:
+                raise ValueError(f"No existe la solicitud con código {codsolicitud}.")

@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { verificarMascota, crearSolicitud } from "../services/api";
+import {
+  verificarMascota,
+  crearSolicitud,
+  obtenerMascotas,
+  obtenerTiposMascotas,
+} from "../services/api";
 
-const SUPABASE_URL = "https://pkkoudfejdlwgfjjixdl.supabase.co";
-const SUPABASE_KEY = "sb_publishable_sjfKqIAwm1khf3ltPrULSQ_9rPmF91H";
-
-const TIPO_MASCOTAS = [
+const TIPOS_FALLBACK = [
   { codtipomascota: 1,  nomtipomascota: "Perro"   },
   { codtipomascota: 2,  nomtipomascota: "Gato"    },
   { codtipomascota: 3,  nomtipomascota: "Conejo"  },
@@ -31,39 +33,31 @@ function formatFecha(fechaStr) {
   return d.toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" });
 }
 
-async function fetchTodasLasMascotas() {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/mascotas` +
-    `?select=codmascota,nombre,especie,fechaingreso,codtipomascota,tipomascotas(nomtipomascota)` +
-    `&order=nombre.asc`,
-    {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-  if (!res.ok) throw new Error("No se pudieron cargar las mascotas");
-  return res.json();
-}
-
 export default function MascotasPage() {
   const { token, user } = useAuth();
 
   const [tipoSeleccionado, setTipoSeleccionado] = useState("");
+  const [tiposMascotas, setTiposMascotas]       = useState(TIPOS_FALLBACK);
   const [todasMascotas, setTodasMascotas]       = useState([]);
   const [loadingMascotas, setLoadingMascotas]   = useState(true);
   const [errorMascotas, setErrorMascotas]       = useState(null);
   const [estados, setEstados]                   = useState({});
 
-  // Carga todas las mascotas al montar
+  // Carga todas las mascotas y tipos desde el Gateway al montar
   useEffect(() => {
-    fetchTodasLasMascotas()
-      .then(setTodasMascotas)
+    if (!token) return;
+    setLoadingMascotas(true);
+    setErrorMascotas(null);
+
+    Promise.all([
+      obtenerMascotas(token).then(setTodasMascotas),
+      obtenerTiposMascotas(token).then((data) => {
+        if (Array.isArray(data) && data.length > 0) setTiposMascotas(data);
+      }).catch(() => {}),
+    ])
       .catch((err) => setErrorMascotas(err.message))
       .finally(() => setLoadingMascotas(false));
-  }, []);
+  }, [token]);
 
   // Filtrado en cliente segun tipo seleccionado
   const mascotasFiltradas = tipoSeleccionado
@@ -113,14 +107,14 @@ export default function MascotasPage() {
     }
   }
 
-  const tipoInfo = TIPO_MASCOTAS.find((t) => t.codtipomascota === parseInt(tipoSeleccionado));
+  const tipoInfo = tiposMascotas.find((t) => t.codtipomascota === parseInt(tipoSeleccionado));
 
   return (
     <div>
       <p className="page-title">Adoptar mascota</p>
       <p className="page-sub">Selecciona el tipo de mascota para ver las disponibles</p>
 
-      {/* Card filtro tipo — identica a la original */}
+      {/* Card filtro tipo — idéntica a la original */}
       <div className="card">
         <div className="section-label">Tipo de mascota</div>
         <select
@@ -129,7 +123,7 @@ export default function MascotasPage() {
           style={{ width: "100%" }}
         >
           <option value="">-- Selecciona un tipo --</option>
-          {TIPO_MASCOTAS.map((t) => (
+          {tiposMascotas.map((t) => (
             <option key={t.codtipomascota} value={t.codtipomascota}>
               {t.nomtipomascota}
             </option>
@@ -171,7 +165,7 @@ export default function MascotasPage() {
               const sr         = est.solicitudResult;
               const disponible = vr?.data?.disponible;
               const canSol     = vr?.status === 200 && disponible;
-              const nomTipo    = m.tipomascotas?.nomtipomascota ?? tipoInfo?.nomtipomascota ?? "—";
+              const nomTipo = m.nomtipomascota || m.tipomascotas?.nomtipomascota || tipoInfo?.nomtipomascota || "—";
 
               return (
                 <div key={m.codmascota} style={{

@@ -12,6 +12,8 @@ logger = logging.getLogger("gateway.verify_user")
 
 PUBLIC_PATHS = {
     "/gateway/v1/register",
+    "/gateway/v1/auth/login",
+    "/gateway/v1/localidades",
     "/health",
     "/docs",
     "/openapi.json",

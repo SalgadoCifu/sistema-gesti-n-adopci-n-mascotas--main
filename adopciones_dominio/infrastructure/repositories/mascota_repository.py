@@ -69,3 +69,43 @@ class MascotaRepository(AbstractMascotaRepository):
             )
             if result.rowcount == 0:
                 raise ValueError(f"No existe la mascota con código {codmascota}.")
+
+    async def listar_todas(self) -> list[dict]:
+        query = text(
+            """
+            SELECT
+                m.codmascota,
+                m.nombre,
+                m.especie,
+                m.estado,
+                m.fechaingreso,
+                m.codtipomascota,
+                t.nomtipomascota
+            FROM mascotas m
+            LEFT JOIN tipomascotas t ON m.codtipomascota = t.codtipomascota
+            ORDER BY m.nombre ASC
+            """
+        )
+        async with self._session_scope() as session:
+            result = await session.execute(query)
+            rows = result.mappings().fetchall()
+            return [
+                {
+                    **dict(r),
+                    "tipomascotas": {"nomtipomascota": r["nomtipomascota"]} if r["nomtipomascota"] else None,
+                }
+                for r in rows
+            ]
+
+    async def listar_tipos(self) -> list[dict]:
+        query = text(
+            """
+            SELECT codtipomascota, nomtipomascota
+            FROM tipomascotas
+            ORDER BY codtipomascota ASC
+            """
+        )
+        async with self._session_scope() as session:
+            result = await session.execute(query)
+            rows = result.mappings().fetchall()
+            return [dict(r) for r in rows]

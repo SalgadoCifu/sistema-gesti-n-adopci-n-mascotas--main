@@ -109,3 +109,45 @@ def test_gateway_propagacion_transparente_de_errores(client):
         data = response.json()
         assert data["code"] == "MAX_SOLICITUDES_EXCEDIDO"
         assert "solicitud activa" in data["detail"]
+
+
+def test_gateway_localidades_publico(client):
+    with patch("gateway.register.get_engine") as mock_engine:
+        mock_conn = mock_engine.return_value.connect.return_value.__enter__.return_value
+        mock_cursor = mock_conn.execute.return_value.mappings.return_value
+        mock_cursor.fetchall.return_value = [
+            {"codlocalidad": 1, "nomlocalidad": "Usaquén"},
+            {"codlocalidad": 2, "nomlocalidad": "Chapinero"},
+        ]
+
+        response = client.get("/gateway/v1/localidades")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert data[0]["nomlocalidad"] == "Usaquén"
+
+
+def test_gateway_login_exitoso(client):
+    from unittest.mock import MagicMock
+    mock_supabase_resp = MagicMock()
+    mock_supabase_resp.is_success = True
+    mock_supabase_resp.status_code = 200
+    mock_supabase_resp.json.return_value = {
+        "access_token": "token-test-123",
+        "user": {
+            "id": "uuid-123",
+            "user_metadata": {"cedula": "1001", "nombre": "Carlos Demo"},
+        },
+    }
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_supabase_resp):
+        response = client.post(
+            "/gateway/v1/auth/login",
+            json={"email": "adoptante.demo@example.com", "password": "password123"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["access_token"] == "token-test-123"
+        assert data["user"]["cedula"] == "1001"
+        assert data["user"]["nombre"] == "Carlos Demo"
+

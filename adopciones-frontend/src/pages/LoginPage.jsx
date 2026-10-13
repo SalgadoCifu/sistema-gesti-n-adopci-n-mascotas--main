@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-
-const SUPABASE_URL = "https://pkkoudfejdlwgfjjixdl.supabase.co";
-const SUPABASE_KEY = "sb_publishable_sjfKqIAwm1khf3ltPrULSQ_9rPmF91H";
+import { loginUser } from "../services/api";
 
 export default function LoginPage({ onGoToRegister }) {
   const { login } = useAuth();
@@ -16,32 +14,14 @@ export default function LoginPage({ onGoToRegister }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        SUPABASE_URL + "/auth/v1/token?grant_type=password",
-        {
-          method: "POST",
-          headers: {
-            apikey: SUPABASE_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ email, password }),
-        }
-      );
-      const data = await res.json();
+      const res = await loginUser(email, password);
       if (!res.ok) {
-        setError(data.msg || data.error_description || "Credenciales invalidas");
+        setError(res.data?.detail || "Credenciales inválidas.");
         return;
       }
-      const token = data.access_token;
-      const cedula = data.user?.user_metadata?.cedula || "";
-      const nombre = data.user?.user_metadata?.nombre || data.user?.email || email;
-      if (!cedula) {
-        setError("Este usuario no tiene cédula registrada en el token.");
-        return;
-      }
-      login(token, { cedula, nombre });
+      login(res.data.access_token, res.data.user);
     } catch (err) {
-      setError("No se pudo conectar: " + err.message);
+      setError("No se pudo conectar con el servidor: " + err.message);
     } finally {
       setLoading(false);
     }

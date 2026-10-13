@@ -1,15 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
-import { crearSolicitud } from "../services/api";
-
-const SUPABASE_URL = "https://pkkoudfejdlwgfjjixdl.supabase.co";
-const SUPABASE_KEY = "sb_publishable_sjfKqIAwm1khf3ltPrULSQ_9rPmF91H";
+import { crearSolicitud, obtenerSolicitudActiva } from "../services/api";
 
 // ─── Estado visual ────────────────────────────────────────────────────────────
 const ESTADO_CONFIG = {
   "pendiente":   { icon: "ti-clock",        color: "#6366f1", bg: "#eef2ff", label: "Pendiente"   },
   "en revisión": { icon: "ti-clock-hour-4", color: "#f59e0b", bg: "#fffbeb", label: "En revisión" },
   "en revision": { icon: "ti-clock-hour-4", color: "#f59e0b", bg: "#fffbeb", label: "En revisión" },
+  "en_proceso":  { icon: "ti-clock-hour-4", color: "#f59e0b", bg: "#fffbeb", label: "En proceso"  },
   "aprobada":    { icon: "ti-circle-check", color: "#22c55e", bg: "#f0fdf4", label: "Aprobada"    },
   "rechazada":   { icon: "ti-circle-x",     color: "#ef4444", bg: "#fef2f2", label: "Rechazada"   },
 };
@@ -21,7 +19,6 @@ function estadoConfig(estado) {
 
 function formatFecha(fechaStr) {
   if (!fechaStr) return "—";
-  // Supabase devuelve "2026-05-25 02:46:51.022012" con espacio; normalizar a ISO
   const normalized = fechaStr.toString().replace(" ", "T");
   const d = new Date(normalized);
   if (isNaN(d.getTime())) return fechaStr;
@@ -31,124 +28,26 @@ function formatFecha(fechaStr) {
   });
 }
 
-// ─── Fetchers ─────────────────────────────────────────────────────────────────
-
-// Headers con anon key — funciona cuando la tabla tiene política RLS SELECT abierta
-// Si no devuelve datos, ejecutar en Supabase SQL Editor:
-//   CREATE POLICY "allow_read_solicitudes" ON public.solicitudes FOR SELECT USING (true);
-//   CREATE POLICY "allow_read_mascotas"    ON public.mascotas    FOR SELECT USING (true);
-const anonHeaders = {
-  apikey: SUPABASE_KEY,
-  Authorization: `Bearer ${SUPABASE_KEY}`,
-  "Content-Type": "application/json",
-};
-
-async function fetchSolicitudActiva(cedula, token) {
-  // Intentamos primero con el JWT del usuario, luego con anon key
-  const intentos = [
-    { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
-    { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-  ];
-
-  let solicitud = null;
-
-  for (const headers of intentos) {
-    const url =
-      `${SUPABASE_URL}/rest/v1/solicitudes` +
-      `?cedula=eq.${encodeURIComponent(cedula)}` +
-      `&select=cedula,codmascota,fechasolicitud,estado` +
-      `&order=fechasolicitud.desc&limit=1`;
-
-    let res;
-    try {
-      res = await fetch(url, { headers: { ...headers, "Content-Type": "application/json" } });
-    } catch (err) {
-      console.error("[fetchSolicitudActiva] error de red:", err);
-      continue;
-    }
-
-    const raw = await res.json().catch(() => null);
-
-    if (!res.ok) continue;
-    if (Array.isArray(raw) && raw.length > 0) {
-      solicitud = raw[0];
-      break;
-    }
-  }
-
-  if (!solicitud) return null;
-
-  // Enriquecer con nombre y especie de la mascota
-  if (solicitud.codmascota) {
-    const masUrl =
-      `${SUPABASE_URL}/rest/v1/mascotas` +
-      `?codmascota=eq.${solicitud.codmascota}` +
-      `&select=nombre,especie&limit=1`;
-
-    const masIntents = [
-      { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
-      { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-    ];
-
-    for (const headers of masIntents) {
-      try {
-        const r = await fetch(masUrl, { headers: { ...headers, "Content-Type": "application/json" } });
-        const d = await r.json().catch(() => null);
-        if (r.ok && Array.isArray(d) && d.length > 0) {
-          solicitud.mascota = d[0];
-          break;
-        }
-      } catch (err) {
-        console.error("[fetchMascota] error de red:", err);
-      }
-    }
-  }
-
-  return solicitud;
-}
-
 // ─── Tarjeta solicitud activa ─────────────────────────────────────────────────
 function SolicitudActivaCard({ solicitud, onRefresh, refreshing }) {
   const cfg     = estadoConfig(solicitud.estado);
   const mascota = solicitud.mascota;
-  const esActiva = !["rechazada"].includes((solicitud.estado || "").toLowerCase());
 
   return (
     <div className="card" style={{ borderLeft: `4px solid ${cfg.color}` }}>
-      {/* Aviso superior */}
-      {esActiva && (
+      {/* Cabecera */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          background: cfg.bg, border: `1px solid ${cfg.color}33`,
-          borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13,
+          width: 36, height: 36, borderRadius: "50%",
+          background: cfg.bg, color: cfg.color,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 18, flexShrink: 0,
         }}>
-          <i className="ti ti-info-circle" style={{ color: cfg.color, fontSize: 16, flexShrink: 0 }} aria-hidden="true" />
-          <span style={{ color: cfg.color, fontWeight: 600 }}>
-            Actualmente tienes un proceso de adopción activo
-          </span>
-        </div>
-      )}
-
-      <div className="section-label" style={{ marginBottom: 14 }}>Tu solicitud</div>
-
-      {/* Mascota destacada */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 14,
-        padding: "12px 14px", borderRadius: 8,
-        background: "var(--color-surface, #f8fafc)",
-        border: "1px solid var(--color-border, #e5e7eb)",
-        marginBottom: 14,
-      }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: 10,
-          background: cfg.bg, display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0,
-        }}>
-          <i className="ti ti-paw" style={{ color: cfg.color, fontSize: 22 }} aria-hidden="true" />
+          <i className="ti ti-paw" aria-hidden="true" />
         </div>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>
-            {mascota?.nombre ?? `Mascota cód. ${solicitud.codmascota}`}
+          <div style={{ fontWeight: 700, fontSize: 15 }}>
+            {mascota?.nombre ? mascota.nombre : `Mascota #${solicitud.codmascota}`}
           </div>
           {mascota?.especie && (
             <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
@@ -211,11 +110,11 @@ export default function SolicitudesPage() {
   const [errorConsulta, setErrorConsulta]     = useState(null);
 
   const consultarSolicitud = useCallback(async () => {
-    if (!user?.cedula) { setLoadingConsulta(false); return; }
+    if (!token) { setLoadingConsulta(false); return; }
     setLoadingConsulta(true);
     setErrorConsulta(null);
     try {
-      const data = await fetchSolicitudActiva(user.cedula, token);
+      const data = await obtenerSolicitudActiva(token);
       setSolicitudActiva(data);
     } catch (err) {
       console.error("[consultarSolicitud]", err);
@@ -223,33 +122,36 @@ export default function SolicitudesPage() {
     } finally {
       setLoadingConsulta(false);
     }
-  }, [user?.cedula, token]);
+  }, [token]);
 
-  useEffect(() => { consultarSolicitud(); }, [consultarSolicitud]);
+  useEffect(() => {
+    consultarSolicitud();
+  }, [consultarSolicitud]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setResult(null);
-    const res = await crearSolicitud(cedula.trim(), parseInt(codmascota, 10), token)
+    const res = await crearSolicitud(codmascota, token, cedula)
       .catch((err) => ({ status: 0, data: { detail: `Error de red: ${err.message}`, code: "NETWORK_ERROR" } }));
-    setResult(res);
     setLoading(false);
 
     if (res.status === 201) {
-      // Solicitud creada: recargar
+      // Solicitud creada: limpiar input y resultado del form para que solo se muestre SolicitudActivaCard
       setCodmascota("");
-      consultarSolicitud();
-    } else if (res.status === 409) {
-      // Ya tiene una activa: buscar la solicitud REAL desde Supabase
-      // (ignorar el código que el usuario escribió, puede ser cualquier mascota)
       setResult(null);
       consultarSolicitud();
+    } else if (res.status === 409) {
+      // Ya tiene una activa: actualizar vista para reflejarla
+      setResult(null);
+      consultarSolicitud();
+    } else {
+      setResult(res);
     }
   }
 
   const tieneActiva = solicitudActiva !== null &&
-    (solicitudActiva.estado || "").toLowerCase() !== "rechazada";
+    !["rechazada"].includes((solicitudActiva.estado || "").toLowerCase());
 
   const statusColor = { 201: "success", 404: "error", 409: "warn", 422: "warn", 400: "error", 0: "error" };
 
@@ -274,7 +176,7 @@ export default function SolicitudesPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10,
             color: "var(--color-text-secondary)", fontSize: 14 }}>
             <i className="ti ti-inbox" aria-hidden="true" style={{ fontSize: 20 }} />
-            Consulta acá tus procesos de adopción o crea un proceso.
+            No tienes procesos de adopción en curso. Puedes crear una solicitud abajo.
           </div>
         </div>
       )}
@@ -304,7 +206,7 @@ export default function SolicitudesPage() {
             <div className={`result-box result-${statusColor[result.status] || "error"}`} style={{ marginTop: 14 }}>
               {result.status === 201
                 ? "✓ Solicitud creada exitosamente"
-                : <>{result.data.detail}{result.data.code && <code style={{ marginLeft: 6, fontSize: 11 }}>[{result.data.code}]</code>}</>}
+                : <>{result.data?.detail || "Error al procesar solicitud"}{result.data?.code && <code style={{ marginLeft: 6, fontSize: 11 }}>[{result.data.code}]</code>}</>}
             </div>
           )}
         </div>
@@ -312,7 +214,7 @@ export default function SolicitudesPage() {
 
       {/* ── Códigos de respuesta ───────────────────────────────────────────── */}
       <div className="card">
-        <div className="section-label">Códigos de respuesta</div>
+        <div className="section-label">Códigos de respuesta del API Gateway</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[
             { status: "201", color: "badge-success", msg: "Solicitud creada — SolicitudResponse" },
